@@ -1,6 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Command line script for importing HSL public transportation (JORE) stop data to OpenStreetMap.
+
+Usage: python update-tags.py -h
+
+Requires: Python 3.6 or later
+"""
 import xml.etree.ElementTree as et
 import csv
 import argparse
+import textwrap
 
 
 class Stop:
@@ -10,26 +21,45 @@ class Stop:
         self.name = name
         self.name_sv = name_sv
 
+        # JORE stop type values which are not sheltered.
+        # This needs to verified after the final JORE data release.
         if shelter in ("04", "08", ""):
-            self.shelter = "no"
+            self.shelter = False
         else:
-            self.shelter = "yes"
+            self.shelter = True
+
+    def __str__(self):
+        return f"\n id: {self.id} \n stop_id: {self.stop_id} \n name: {self.name} \n name_sv: {self.name_sv} \n shelter: {self.shelter}"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Finds public transport stop ref-tags from jOSM-file (.osm). Prefixes ref-tag values with letter 'H'. Adds 'shelter=yes'-tag. Adds name, name:fi and name:sv-tags"
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent(
+            """\
+        Finds HSL public transport stops from jOSM-file (.osm) and modifies it's OSM-tags
+        with HSL JORE stop data using 'ref'-tag value as an identifier.
+        
+        Following transformations are made for the output jOSM-file:
+         - 'ref'-tag values are prefixed with letter 'H'.
+         - Adds 'shelter'-tag with value 'yes' or 'no'. 
+         - Adds 'name', 'name:fi', and 'name:sv'-tag if missing."""
+        ),
     )
+    parser.add_argument("input_osm", metavar="input.osm", help="Source .OSM-file")
     parser.add_argument(
-        "input_osm", metavar="input.osm", help="Source .OSM-file containing ref-tags"
-    )
-    parser.add_argument(
-        "input_stops", metavar="input.csv", help="Jore data in CSV-format"
+        "input_stops", metavar="input.csv", help="JORE data in CSV-format"
     )
     parser.add_argument(
         "output",
         metavar="output.osm",
         help="The ouput .OSM-file with transformed ref-tags, name and shelter info.",
+    )
+    parser.add_argument(
+        "-s",
+        "--stats",
+        help="Prints out more verbose stats about script results",
+        action="store_true",
     )
     return parser.parse_args()
 
@@ -58,44 +88,38 @@ def get_osm_tags(xml_element):
     }
 
 
-def add_prefix_h_to_ref(elem):
-    """Adds modify action to element and adds prefix 'H' to the value of tag 'ref'"""
-    tags = get_osm_tags(elem)
-    new_ref_value = "H" + tags.get("ref")
-
+def update_tag(elem, key, value):
+    """Adds modify action to element. Updates value of chosen key of the 'tag'-element."""
     elem.set("action", "modify")
     for tag in elem.findall("tag"):
-        if tag.attrib["k"] == "ref":
-            tag.set("v", new_ref_value)
+        if tag.attrib["k"] == key:
+            tag.set("v", value)
 
 
-def add_shelter(elem, value):
-    """Adds modify action to element and adds 'shelter'-tag with param value (should be 'yes' or 'no')."""
+def add_stop_name(elem, jore_stop):
+    """Adds stop name tag in Finnish and/or Swedish from JORE stop object with
+    tag 'name' or 'name:sv' if the tag is missing."""
+
+    tags = get_osm_tags(elem)
+
+    if "name" not in tags.keys():
+        create_tag(elem, "name", jore_stop.name)
+    # JORE name is often abbreviated. Instead use JORE name for "name:fi"-tag 
+    # value only if "name"-tag is missing in OSM.
+    if "name:fi" not in tags.keys():
+        if "name" not in tags.keys():
+            create_tag(elem, "name:fi", jore_stop.name)
+        else:
+            create_tag(elem, "name:fi", tags["name"])
+    if "name:sv" not in tags.keys():
+        create_tag(elem, "name:sv", jore_stop.name_sv)
+
+
+def create_tag(elem, key, value):
+    """Adds modify action to element. Adds a new tag-element to param elem with key and value."""
     elem.set("action", "modify")
-
-    shelter = {"k": "shelter", "v": value}
-    new_tag = et.Element("tag", shelter)
-
-    elem.append(new_tag)
-
-
-def add_stop_name(elem):
-    """Adds modify action to element and adds stop name in Finnish and/or Swedish with
-    tags 'name:fi' and 'name:sv' if tag is missing."""
-
-    elem.set("action", "modify")
-
-    tags = get_osm_tags(elem).keys()
-
-    if "name" not in tags or "name:fi" not in tags:
-        name_fi = {"k": "name:fi", "v": "NEW_FINNISH_NAME_FOR_STOP"}
-        new_name_fi_tag = et.Element("tag", name_fi)
-        elem.append(new_name_fi_tag)
-
-    if "name:sv" not in tags:
-        name_sv = {"k": "name:sv", "v": "NEW_SWEDISH_NAME_FOR_STOP"}
-        new_name_sv_tag = et.Element("tag", name_sv)
-        elem.append(new_name_sv_tag)
+    new_tag = {"k": key, "v": value}
+    elem.append(et.Element("tag", new_tag))
 
 
 def main():
@@ -104,30 +128,85 @@ def main():
     etree = et.parse(args.input_osm)
     stops = read_stop_data(args.input_stops)
 
-    prefixed = 0
-    sheltered = 0
-    named = 0
+    stats = {"prefixed": 0, "sheltered_yes": 0, "sheltered_no": 0, "named": 0}
 
-    for stop in stops:
-        print(stop)
+    all_jore_ref = [x.stop_id for x in stops]
+    all_osm_refs = []
 
     for elem in etree.getroot():
-        tags = get_osm_tags(elem)
+        osm_tags = get_osm_tags(elem)
 
-        if "ref" in tags.keys():
-            for stop in stops:
-                if tags["ref"] == stop.stop_id:
-                    add_prefix_h_to_ref(elem)
-                    prefixed += 1
-        if "shelter" not in tags:
-            add_shelter(elem, "yes")
-            sheltered += 1
-        if "name:fi" not in tags or "name:sv" not in tags:
-            add_stop_name(elem)
-            named += 1
+        if "ref" in osm_tags.keys():
+            all_osm_refs.append(osm_tags["ref"])
 
-    etree.write(args.output, encoding="utf-8")
-    print(f"prefixed: {prefixed}, sheltered: {sheltered}, named: {named}")
+            for jore_stop in stops:
+                # Some OSM ref-tag values already have 'H'-prefix.
+                # Ignore leading 'H' for JORE stop_id matchings sake.
+                ref = (
+                    osm_tags["ref"][1:]
+                    if osm_tags["ref"][:1] == "H"
+                    else osm_tags["ref"]
+                )
+
+                if ref == jore_stop.stop_id:
+                    if osm_tags["ref"] == jore_stop.stop_id:
+                        new_ref_value = "H" + osm_tags.get("ref")
+                        update_tag(elem, "ref", new_ref_value)
+                        stats["prefixed"] += 1
+
+                    if "shelter" not in osm_tags.keys():
+                        if jore_stop.shelter:
+                            create_tag(elem, "shelter", "yes")
+                            stats["sheltered_yes"] += 1
+                        else:
+                            create_tag(elem, "shelter", "no")
+                            stats["sheltered_no"] += 1
+
+                    any_name_tag_is_missing = any(
+                        key not in osm_tags.keys()
+                        for key in ["name", "name:fi", "name:sv"]
+                    )
+                    if any_name_tag_is_missing:
+                        add_stop_name(elem, jore_stop)
+                        stats["named"] += 1
+
+                    # Update the tags in case the element tree got a new tag
+                    osm_tags = get_osm_tags(elem)
+
+    if args.stats:
+        # Print stats if optional command line argument: -s
+        all_jore_ref_set = set(all_jore_ref)
+        all_osm_refs_set = set(all_osm_refs)
+        not_in_jore = all_osm_refs_set - all_jore_ref_set
+        not_in_osm = all_jore_ref_set - all_osm_refs_set
+
+        print(f"JORE-stops: {len(all_jore_ref)}")
+        print(f"Unique JORE stop_ids: {len(all_jore_ref_set)}")
+        print(f"OSM stops with 'ref'-tag: {len(all_osm_refs)}")
+        print(f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}")
+        print(f"OSM stops 'ref'-tag values with JORE match: {len(all_osm_refs)}")
+        print(
+            f"Unique OSM stop 'ref'-tag values with JORE match: {len(all_osm_refs_set)}"
+        )
+        print(
+            f"\nUnique OSM stop 'ref'-tag values not having a matching JORE stop_id value: {len(not_in_jore)}\n"
+        )
+        print(sorted(not_in_jore))
+
+        print(
+            f"\nUnique JORE stop_ids not having a matching OSM 'ref'-tag value: {len(not_in_osm)}\n"
+        )
+        print(sorted(not_in_osm))
+
+    print("\nResults\n-------")
+    for key, value in stats.items():
+        print(f"{key}: {value}")
+
+    try:
+        etree.write(args.output, encoding="utf-8")
+        print(f"\nSaved {args.output} with updated tags.")
+    except Exception as e:
+        print(f"\nError writing file {args.output}: {e}")
 
 
 if __name__ == "__main__":
