@@ -12,6 +12,7 @@ import xml.etree.ElementTree as et
 import csv
 import argparse
 import textwrap
+import logging
 
 
 class Stop:
@@ -65,52 +66,58 @@ def parse_args():
 
 
 def read_stop_data(input_file):
-    """Reads stop data in CSV format and returns a list of Stop-objects with the relevant data for import."""
+    """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
     stops = []
-    with open(input_file, newline="", encoding="utf8") as csvfile:
-        reader = csv.DictReader(csvfile, delimiter=";")
-        for row in reader:
-            new_stop = Stop(
-                row["soltunnus"],
-                row["sollistunn"],
-                row["pysnimi"],
-                row["pysnimir"],
-                row["pysakkityy"],
-            )
-            stops.append(new_stop)
+    try:
+        with open(input_file, newline="", encoding="utf8") as csvfile:
+            reader = csv.DictReader(csvfile, delimiter=";")
+            for row in reader:
+                new_stop = Stop(
+                    row["soltunnus"],
+                    row["sollistunn"],
+                    row["pysnimi"],
+                    row["pysnimir"],
+                    row["pysakkityy"],
+                )
+                stops.append(new_stop)
+    except Exception as e:
+        logging.error(f"Error reading JORE stop data:", exc_info=True)
+
     return stops
 
 
 def get_osm_tags(xml_element):
-    """Returns tags as a dict for OSM XML element"""
+    """Returns tags as a dict for OSM XML element."""
     return {
         element.get("k"): element.get("v") for element in xml_element.findall("tag")
     }
 
 
 def update_tag(elem, key, value):
-    """Adds modify action to element. Updates value of chosen key of the 'tag'-element."""
+    """Add modify action to element. Updates value of chosen key of the 'tag'-element."""
     elem.set("action", "modify")
     for tag in elem.findall("tag"):
         if tag.attrib["k"] == key:
             tag.set("v", value)
+            logging.info(f"   Updated '{key}'-tag with value: {value}")
 
 
 def add_stop_name(elem, jore_stop):
-    """Adds stop name tag in Finnish and/or Swedish from JORE stop object with
+    """Add stop name tag in Finnish and/or Swedish from JORE stop object with
     tag 'name' or 'name:sv' if the tag is missing."""
 
     tags = get_osm_tags(elem)
 
     if "name" not in tags.keys():
         create_tag(elem, "name", jore_stop.name)
-    # JORE name is often abbreviated. Instead use JORE name for "name:fi"-tag 
-    # value only if "name"-tag is missing in OSM.
+    # JORE name is often abbreviated. Use "name"-tag value for new "name:fi"-tag value.
+    # Use JORE name for "name:fi"-tag value only if "name"-tag is missing in OSM.
     if "name:fi" not in tags.keys():
         if "name" not in tags.keys():
             create_tag(elem, "name:fi", jore_stop.name)
         else:
-            create_tag(elem, "name:fi", tags["name"])
+            osm_name_tag = tags["name"]
+            create_tag(elem, "name:fi", osm_name_tag)
     if "name:sv" not in tags.keys():
         create_tag(elem, "name:sv", jore_stop.name_sv)
 
@@ -120,23 +127,35 @@ def create_tag(elem, key, value):
     elem.set("action", "modify")
     new_tag = {"k": key, "v": value}
     elem.append(et.Element("tag", new_tag))
+    logging.info(f"   Created new tag {key}={value}")
 
 
 def main():
+    logging.basicConfig(
+        filename="update-tags-log.log",
+        filemode="w",
+        level=logging.INFO,
+        format="%(message)s",
+    )
+
     args = parse_args()
 
     etree = et.parse(args.input_osm)
+
     stops = read_stop_data(args.input_stops)
 
     stats = {"prefixed": 0, "sheltered_yes": 0, "sheltered_no": 0, "named": 0}
 
     all_jore_ref = [x.stop_id for x in stops]
     all_osm_refs = []
+    jore_stops_missing_osm_ref_match = []
 
     for elem in etree.getroot():
+
         osm_tags = get_osm_tags(elem)
 
         if "ref" in osm_tags.keys():
+            osm_id = elem.get("id")
             all_osm_refs.append(osm_tags["ref"])
 
             for jore_stop in stops:
@@ -149,6 +168,10 @@ def main():
                 )
 
                 if ref == jore_stop.stop_id:
+
+                    logging.info(
+                        f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
+                    )
                     if osm_tags["ref"] == jore_stop.stop_id:
                         new_ref_value = "H" + osm_tags.get("ref")
                         update_tag(elem, "ref", new_ref_value)
@@ -172,6 +195,8 @@ def main():
 
                     # Update the tags in case the element tree got a new tag
                     osm_tags = get_osm_tags(elem)
+                else:
+                    jore_stops_missing_osm_ref_match.append(jore_stop)
 
     if args.stats:
         # Print stats if optional command line argument: -s
@@ -207,6 +232,7 @@ def main():
         print(f"\nSaved {args.output} with updated tags.")
     except Exception as e:
         print(f"\nError writing file {args.output}: {e}")
+        logging.error(f"Error writing file {args.ouput}: {e}")
 
 
 if __name__ == "__main__":
