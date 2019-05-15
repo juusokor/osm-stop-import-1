@@ -178,10 +178,10 @@ def main():
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
                     )
                     if osm_tags["ref"] == jore_stop.stop_id:
-                        # if jore_stop.muncipality == "Helsinki-koodi":
-                        new_ref_value = "H" + osm_tags.get("ref")
-                        update_tag(elem, "ref", new_ref_value)
-                        stats["prefixed"] += 1
+                        if jore_stop.municipality == "091":
+                            new_ref_value = "H" + osm_tags.get("ref")
+                            update_tag(elem, "ref", new_ref_value)
+                            stats["prefixed"] += 1
 
                     if "shelter" not in osm_tags.keys():
                         if jore_stop.shelter:
