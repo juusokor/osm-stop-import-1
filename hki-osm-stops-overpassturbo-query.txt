@@ -1,0 +1,48 @@
+// define area filter for Helsinki (OSM municipality)
+(
+  area[name="Helsinki"];
+)->.hki;
+
+// different public transportation stop types in Helsinki area
+
+(
+  // tram stops
+  node["railway"="tram_stop"]["ref"](area.hki);
+  way["railway"="tram_stop"]["ref"](area.hki);
+  relation["railway"="tram_stop"]["ref"](area.hki);
+  
+  // bus stops
+  node["highway"="bus_stop"]["ref"](area.hki);
+  way["highway"="bus_stop"]["ref"](area.hki);
+  relation["highway"="bus_stop"]["ref"](area.hki);
+    
+  // train and subway stations
+  node["railway"="station"]["public_transport"="station"]["ref"](area.hki);
+  way["railway"="station"]["public_transport"="station"]["ref"](area.hki);
+  relation["railway"="station"]["public_transport"="station"]["ref"](area.hki);
+  
+  // include stop area relations
+  relation["public_transport"="stop_area"]["ref"](area.hki);
+)->.hki_stops;
+
+// nodes part of subway relation in Helsinki area.
+(
+  rel(area.hki)[type=route][route=subway];
+)->.metro;
+
+// subway station platforms and stop positions (each Helsinki station has two platforms with unique ref)
+(
+  way(r.metro)[ref](area.hki);
+  node(r.metro)[ref](area.hki);
+)->.metro_stops;
+
+// output union
+(
+  .hki_stops;
+  .metro_stops;
+);
+
+// print results
+out body;
+>;
+out meta;

@@ -1,0 +1,54 @@
+// define HSL area filter with participant municipalities (OSM municipality)
+(
+  area[name="Helsinki"];
+  area[name="Espoo"];
+  area[name="Vantaa"];
+  area[name="Kirkkonummi"];
+  area[name="Kerava"];
+  area[name="Kauniainen"];
+  area[name="Sipoo"];
+  area[name="Tuusula"];
+  area[name="Siuntio"];
+)->.hsl;
+
+// different public transportation stop types in HSL area
+
+(
+  // tram stops
+  node["railway"="tram_stop"]["ref"][!"name:sv"](area.hsl);
+  way["railway"="tram_stop"]["ref"][!"name:sv"](area.hsl);
+  relation["railway"="tram_stop"][!"name:sv"]["ref"](area.hsl);
+  
+  // bus stops
+  node["highway"="bus_stop"]["ref"][!"name:sv"](area.hsl);
+  way["highway"="bus_stop"]["ref"][!"name:sv"](area.hsl);
+  relation["highway"="bus_stop"]["ref"][!"name:sv"](area.hsl);
+    
+  // train and subway stations
+  node["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
+  way["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
+  relation["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
+  
+  // include stop area relations
+  relation["public_transport"="stop_area"]["ref"](area.hsl);
+)->.hsl_stops;
+
+// nodes part of subway relation in HSL area.
+(
+  rel(area.hsl)[type=route][route=subway];
+)->.metro;
+
+// subway station platforms and stop positions (each subway station has two platforms with unique ref)
+(
+  way(r.metro)[ref](area.hsl);
+  node(r.metro)[ref](area.hsl);
+)->.metro_stops;
+
+// output union
+(
+  .hsl_stops;
+  .metro_stops;
+);
+out body;
+>;
+out meta;

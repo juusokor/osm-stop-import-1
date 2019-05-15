@@ -6,34 +6,38 @@ Command line script for importing HSL public transportation (JORE) stop data to 
 
 Usage: python update-tags.py -h
 
-Requires: Python 3.6 or later
+Requires: Python 3.7 or later
 """
-import xml.etree.ElementTree as et
+from dataclasses import dataclass, InitVar
+from xml.etree import ElementTree as et
 import csv
 import argparse
 import textwrap
 import logging
 
 
+@dataclass
 class Stop:
-    def __init__(self, id, stop_id, name, name_sv, shelter):
-        self.id = id
-        self.stop_id = stop_id
-        self.name = name
-        self.name_sv = name_sv
+    """Dataclass object to represent JORE stop with import relevant attributes"""
 
-        # JORE stop type values which are not sheltered.
-        # This needs to verified after the final JORE data release.
-        if shelter in ("04", "08", ""):
+    id: str
+    stop_id: str
+    name: str
+    name_sv: str
+    shelter_param: InitVar[str]
+    municipality: str
+    shelter: bool = True
+
+    def __post_init__(self, shelter_param):
+        """JORE stop type values for non-sheltered stops converted to bool.
+        Actual values needs to be verified after the final JORE data release.
+        """
+        if shelter_param in ("04", "08", ""):
             self.shelter = False
-        else:
-            self.shelter = True
-
-    def __str__(self):
-        return f"\n id: {self.id} \n stop_id: {self.stop_id} \n name: {self.name} \n name_sv: {self.name_sv} \n shelter: {self.shelter}"
 
 
 def parse_args():
+    """Parse commandline arguments."""
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(
@@ -78,16 +82,17 @@ def read_stop_data(input_file):
                     row["pysnimi"],
                     row["pysnimir"],
                     row["pysakkityy"],
+                    row["pyskunta"],
                 )
                 stops.append(new_stop)
     except Exception as e:
-        logging.error(f"Error reading JORE stop data:", exc_info=True)
+        logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
 
     return stops
 
 
 def get_osm_tags(xml_element):
-    """Returns tags as a dict for OSM XML element."""
+    """Return tags as a dict for OSM XML element."""
     return {
         element.get("k"): element.get("v") for element in xml_element.findall("tag")
     }
@@ -102,16 +107,24 @@ def update_tag(elem, key, value):
             logging.info(f"   Updated '{key}'-tag with value: {value}")
 
 
+def create_tag(elem, key, value):
+    """Add modify action to element. Add a new tag-element to param elem with key and value."""
+    elem.set("action", "modify")
+    new_tag = {"k": key, "v": value}
+    elem.append(et.Element("tag", new_tag))
+    logging.info(f"   Created new tag {key}={value}")
+
+
 def add_stop_name(elem, jore_stop):
     """Add stop name tag in Finnish and/or Swedish from JORE stop object with
-    tag 'name' or 'name:sv' if the tag is missing."""
-
+    tag 'name' or 'name:sv' if the tag is missing.
+    """
     tags = get_osm_tags(elem)
 
     if "name" not in tags.keys():
         create_tag(elem, "name", jore_stop.name)
-    # JORE name is often abbreviated. Use "name"-tag value for new "name:fi"-tag value.
-    # Use JORE name for "name:fi"-tag value only if "name"-tag is missing in OSM.
+    # JORE-stop.name is often abbreviated. Use "name"-tag value for new "name:fi"-tag value.
+    # Use JORE-stop.name for "name:fi"-tag value only if "name"-tag is missing in OSM.
     if "name:fi" not in tags.keys():
         if "name" not in tags.keys():
             create_tag(elem, "name:fi", jore_stop.name)
@@ -120,14 +133,6 @@ def add_stop_name(elem, jore_stop):
             create_tag(elem, "name:fi", osm_name_tag)
     if "name:sv" not in tags.keys():
         create_tag(elem, "name:sv", jore_stop.name_sv)
-
-
-def create_tag(elem, key, value):
-    """Adds modify action to element. Adds a new tag-element to param elem with key and value."""
-    elem.set("action", "modify")
-    new_tag = {"k": key, "v": value}
-    elem.append(et.Element("tag", new_tag))
-    logging.info(f"   Created new tag {key}={value}")
 
 
 def main():
@@ -173,6 +178,7 @@ def main():
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
                     )
                     if osm_tags["ref"] == jore_stop.stop_id:
+                        # if jore_stop.muncipality == "Helsinki-koodi":
                         new_ref_value = "H" + osm_tags.get("ref")
                         update_tag(elem, "ref", new_ref_value)
                         stats["prefixed"] += 1
