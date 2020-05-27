@@ -90,6 +90,28 @@ def read_stop_data(input_file):
 
     return stops
 
+def read_stop_data_geojson(input_file):
+    """Read stop data in GeoJSON format and return a list of Stop-objects with the relevant data for import."""
+    stops = []
+    try:
+        with open(input_file, newline="", encoding="utf8") as jsonfile:
+            data = json.load(jsonfile)
+            for feature in data["features"]
+                jore_stop = feature["properties"]
+                new_stop = Stop(
+                    jore_stop["SOLMUTUNNU"],
+                    jore_stop["LYHYTTUNNU"],
+                    jore_stop["NIMI1"],
+                    jore_stop["NAMN2"],
+                    jore_stop["PYSAKKITYY"],
+                    jore_stop["pyskunta"],
+                )
+                stops.append(new_stop)
+    except Exception as e:
+        logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
+
+    return stops
+
 
 def get_osm_tags(xml_element):
     """Return tags as a dict for OSM XML element."""
