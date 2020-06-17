@@ -17,6 +17,7 @@ import logging
 import json
 
 STATS = {
+    "matched": 0,
     "prefixed": 0,
     "sheltered_yes": 0,
     "sheltered_no": 0,
@@ -24,6 +25,7 @@ STATS = {
     "named_fi": 0,
     "named_sv": 0,
 }
+
 
 @dataclass
 class Stop:
@@ -197,11 +199,11 @@ def main():
             for jore_stop in stops:
 
                 # In Helsinki the OSM ref-might already have the H-prefix.
-                if (
-                    osm_tags["ref"] == jore_stop.stop_id
-                    or (jore_stop.municipality == "Helsinki" and osm_tags["ref"] == jore_stop.stop_id[1:])
+                if osm_tags["ref"] == jore_stop.stop_id or (
+                    jore_stop.municipality == "Helsinki"
+                    and osm_tags["ref"] == jore_stop.stop_id[1:]
                 ):
-
+                    STATS["matched"] += 1
                     logging.info(
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
                     )
@@ -246,7 +248,7 @@ def main():
         print(f"Unique JORE stop_ids: {len(all_jore_ref_set)}")
         print(f"OSM stops with 'ref'-tag: {len(all_osm_refs)}")
         print(f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}")
-        print(f"OSM stops 'ref'-tag values with JORE match: {len(all_osm_refs)}")
+        print(f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}")
         print(
             f"Unique OSM stop 'ref'-tag values with JORE match: {len(all_osm_refs_set)}"
         )
