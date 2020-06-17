@@ -16,6 +16,14 @@ import textwrap
 import logging
 import json
 
+STATS = {
+    "prefixed": 0,
+    "sheltered_yes": 0,
+    "sheltered_no": 0,
+    "named": 0,
+    "named_fi": 0,
+    "named_sv": 0,
+}
 
 @dataclass
 class Stop:
@@ -26,7 +34,7 @@ class Stop:
     name: str
     name_sv: str
     shelter_param: InitVar[str]
-    municipality: str == None
+    municipality: str = None
     shelter: bool = True
 
     def __post_init__(self, shelter_param):
@@ -38,8 +46,8 @@ class Stop:
             self.shelter = False
 
         # Is the stop in Helsinki
-        if stop_id[:1] == "H":
-          self.municipality = "Helsinki"
+        if self.stop_id[:1] == "H":
+            self.municipality = "Helsinki"
 
 
 def parse_args():
@@ -76,24 +84,26 @@ def parse_args():
 
 
 def read_stop_data(input_file):
-    """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
+    """Read stop data in CSV format and retur n a list of Stop-objects with the relevant data for import."""
     stops = []
     try:
         with open(input_file, newline="", encoding="utf8") as csvfile:
-            reader = csv.DictReader(csvfile, delimiter=";")
+            reader = csv.DictReader(csvfile, delimiter=",")
             for row in reader:
                 new_stop = Stop(
-                  row["SOLMUTUNNU"],
-                  row["LYHYTTUNNU"],
-                  row["NIMI1"],
-                  row["NAMN2"],
-                  row["PYSAKKITYY"],
-                  )
+                    row["SOLMUTUNNU"],
+                    row["LYHYTTUNNU"],
+                    row["NIMI1"],
+                    row["NAMN1"],
+                    row["PYSAKKITYY"],
+                )
                 stops.append(new_stop)
+
     except Exception as e:
         logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
 
     return stops
+
 
 def read_stop_data_geojson(input_file):
     """Read stop data in GeoJSON format and return a list of Stop-objects with the relevant data for import."""
@@ -107,7 +117,7 @@ def read_stop_data_geojson(input_file):
                     jore_stop["SOLMUTUNNU"],
                     jore_stop["LYHYTTUNNU"],
                     jore_stop["NIMI1"],
-                    jore_stop["NAMN2"],
+                    jore_stop["NAMN1"],
                     jore_stop["PYSAKKITYY"],
                 )
                 stops.append(new_stop)
@@ -149,10 +159,13 @@ def add_stop_name(elem, jore_stop):
 
     if "name" not in tags.keys():
         create_tag(elem, "name", jore_stop.name)
+        STATS["named"] += 1
     if "name:fi" not in tags.keys():
         create_tag(elem, "name:fi", jore_stop.name)
+        STATS["named_fi"] += 1
     if "name:sv" not in tags.keys():
         create_tag(elem, "name:sv", jore_stop.name_sv)
+        STATS["named_sv"] += 1
 
 
 def main():
@@ -169,8 +182,6 @@ def main():
 
     stops = read_stop_data(args.input_stops)
 
-    stats = {"prefixed": 0, "sheltered_yes": 0, "sheltered_no": 0, "named": 0}
-
     all_jore_ref = [x.stop_id for x in stops]
     all_osm_refs = []
     jore_stops_missing_osm_ref_match = []
@@ -185,49 +196,44 @@ def main():
 
             for jore_stop in stops:
 
-              # Strip leading 'H' from JORE-stop if the stop is in Helsinki
-              if jore_stop.municipality == "Helsinki":
-                jore_stop.municipality[:1]
+                # In Helsinki the OSM ref-might already have the H-prefix.
+                if (
+                    osm_tags["ref"] == jore_stop.stop_id
+                    or (jore_stop.municipality == "Helsinki" and osm_tags["ref"] == jore_stop.stop_id[1:])
+                ):
 
-              # Some OSM ref-tag values already have 'H'-prefix.
-              # Ignore leading 'H' for JORE stop_id matchings sake.
-              ref = (
-                  osm_tags["ref"][1:]
-                  if osm_tags["ref"][:1] == "H"
-                  else osm_tags["ref"]
-              )
+                    logging.info(
+                        f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
+                    )
 
-              if ref == jore_stop.stop_id:
+                    if (
+                        jore_stop.municipality == "Helsinki"
+                        and osm_tags["ref"][:1] != "H"
+                    ):
+                        new_ref_value = "H" + osm_tags.get("ref")
+                        update_tag(elem, "ref", new_ref_value)
+                        STATS["prefixed"] += 1
 
-                  logging.info(
-                      f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
-                  )
-                  if osm_tags["ref"] == jore_stop.stop_id:
-                      if jore_stop.municipality == "Helsinki":
-                          new_ref_value = "H" + osm_tags.get("ref")
-                          update_tag(elem, "ref", new_ref_value)
-                          stats["prefixed"] += 1
+                    if "shelter" not in osm_tags.keys():
+                        if jore_stop.shelter:
+                            create_tag(elem, "shelter", "yes")
+                            STATS["sheltered_yes"] += 1
+                        else:
+                            create_tag(elem, "shelter", "no")
+                            STATS["sheltered_no"] += 1
 
-                  if "shelter" not in osm_tags.keys():
-                      if jore_stop.shelter:
-                          create_tag(elem, "shelter", "yes")
-                          stats["sheltered_yes"] += 1
-                      else:
-                          create_tag(elem, "shelter", "no")
-                          stats["sheltered_no"] += 1
+                    any_name_tag_is_missing = any(
+                        key not in osm_tags.keys()
+                        for key in ["name", "name:fi", "name:sv"]
+                    )
+                    if any_name_tag_is_missing:
+                        add_stop_name(elem, jore_stop)
 
-                  any_name_tag_is_missing = any(
-                      key not in osm_tags.keys()
-                      for key in ["name", "name:fi", "name:sv"]
-                  )
-                  if any_name_tag_is_missing:
-                      add_stop_name(elem, jore_stop)
-                      stats["named"] += 1
-
-                  # Update the tags in case the element tree got a new tag
-                  osm_tags = get_osm_tags(elem)
-              else:
-                  jore_stops_missing_osm_ref_match.append(jore_stop)
+                    # Update the tags in case the element tree got a new tag
+                    osm_tags = get_osm_tags(elem)
+                else:
+                    # print(f"error: jore-id {jore_stop.stop_id}")
+                    jore_stops_missing_osm_ref_match.append(jore_stop)
 
     if args.stats:
         # Print stats if optional command line argument: -s
@@ -247,15 +253,15 @@ def main():
         print(
             f"\nUnique OSM stop 'ref'-tag values not having a matching JORE stop_id value: {len(not_in_jore)}\n"
         )
-        print(sorted(not_in_jore))
+        # print(sorted(not_in_jore))
 
         print(
             f"\nUnique JORE stop_ids not having a matching OSM 'ref'-tag value: {len(not_in_osm)}\n"
         )
-        print(sorted(not_in_osm))
+        # print(sorted(not_in_osm))
 
     print("\nResults\n-------")
-    for key, value in stats.items():
+    for key, value in STATS.items():
         print(f"{key}: {value}")
 
     try:
