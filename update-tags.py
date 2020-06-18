@@ -59,7 +59,7 @@ def parse_args():
         description=textwrap.dedent(
             """\
         Finds HSL public transport stops from jOSM-file (.osm) and modifies it's OSM-tags
-        with HSL JORE stop data using 'ref'-tag value as an identifier.
+        with HSL (JORE) stop data (.csv) using 'ref'-tag value as an identifier.
 
         Following transformations are made for the output jOSM-file:
          - 'ref'-tag values of stops in Helsinki are prefixed with letter 'H'.
@@ -69,7 +69,7 @@ def parse_args():
     )
     parser.add_argument("input_osm", metavar="input.osm", help="Source .OSM-file")
     parser.add_argument(
-        "input_stops", metavar="input.csv", help="JORE data in CSV-format"
+        "input_stops", metavar="input.csv", help="HSL stop data in CSV-format"
     )
     parser.add_argument(
         "output",
@@ -234,33 +234,18 @@ def main():
                     # Update the tags in case the element tree got a new tag
                     osm_tags = get_osm_tags(elem)
                 else:
-                    # print(f"error: jore-id {jore_stop.stop_id}")
                     jore_stops_missing_osm_ref_match.append(jore_stop)
 
     if args.stats:
         # Print stats if optional command line argument: -s
         all_jore_ref_set = set(all_jore_ref)
         all_osm_refs_set = set(all_osm_refs)
-        not_in_jore = all_osm_refs_set - all_jore_ref_set
-        not_in_osm = all_jore_ref_set - all_osm_refs_set
 
         print(f"JORE-stops: {len(all_jore_ref)}")
         print(f"Unique JORE stop_ids: {len(all_jore_ref_set)}")
         print(f"OSM stops with 'ref'-tag: {len(all_osm_refs)}")
         print(f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}")
         print(f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}")
-        print(
-            f"Unique OSM stop 'ref'-tag values with JORE match: {len(all_osm_refs_set)}"
-        )
-        print(
-            f"\nUnique OSM stop 'ref'-tag values not having a matching JORE stop_id value: {len(not_in_jore)}\n"
-        )
-        # print(sorted(not_in_jore))
-
-        print(
-            f"\nUnique JORE stop_ids not having a matching OSM 'ref'-tag value: {len(not_in_osm)}\n"
-        )
-        # print(sorted(not_in_osm))
 
     print("\nResults\n-------")
     for key, value in STATS.items():
