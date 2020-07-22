@@ -59,7 +59,7 @@ Build image
 
 Run the container with current directory containing the necessary data as bind mount and pass the required command line parameters as environment variables (INPUT, STOPS, OUTPUT):
 
-`docker run -v $PWD:$PWD -w $PWD -e INPUT='hsl-osm-stops-2020-06-18-EXAMPLE-ONLY.osm' -e STOPS='hsl-stop-data-2020-06-18-EXAMPLE-ONLY.csv' -e OUTPUT='output-EXAMPLE.osm' osm-stop-import`
+`docker run -v $PWD:$PWD -w $PWD -e INPUT='hsl-osm-stops-2020-07-22-EXAMPLE-ONLY.osm' -e STOPS='hsl-stop-data-2020-07-22-EXAMPLE-ONLY.csv' -e OUTPUT='output-2020-07-22-EXAMPLE.osm' osm-stop-import`
 
 ## Validate results
 
