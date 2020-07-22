@@ -37,15 +37,17 @@ class Stop:
     name_sv: str
     shelter_param: InitVar[str]
     municipality: str = None
-    shelter: bool = True
+    shelter: str = "yes"  # Default is that the stop is sheltered
 
     def __post_init__(self, shelter_param):
         """Get values for shelter and municipality
         """
-        # JORE stop type values for non-sheltered stops converted to bool.
-        # 04 stands for a pole and 08 for stop position.
-        if shelter_param in ("04", "08", ""):
-            self.shelter = False
+        # JORE stop type values for non-sheltered stops converted to bo
+        # 04 stands for a pole and 08 for stop position. 99 unknown.
+        if shelter_param in ("04", "08"):
+            self.shelter = "no"
+        elif shelter_param == "99":
+            self.shelter = "unknown"
 
         # Is the stop in Helsinki
         if self.stop_id[:1] == "H":
@@ -217,12 +219,14 @@ def main():
                         STATS["prefixed"] += 1
 
                     if "shelter" not in osm_tags.keys():
-                        if jore_stop.shelter:
+                        if jore_stop.shelter == "yes":
                             create_tag(elem, "shelter", "yes")
                             STATS["sheltered_yes"] += 1
-                        else:
+                        elif jore_stop.shelter == "no":
                             create_tag(elem, "shelter", "no")
                             STATS["sheltered_no"] += 1
+                        elif jore_stop.shelter == "unknown":
+                            logging.info(f"   No shelter info in data.")
 
                     any_name_tag_is_missing = any(
                         key not in osm_tags.keys()
