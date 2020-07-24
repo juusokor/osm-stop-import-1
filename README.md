@@ -2,11 +2,11 @@
 
 _Under construction_
 
-This repo consists of tools and documentation for https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import.
+This repo consists of tools for one-time OSM import https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import. [HSL public transportation stop data](https://public-transport-hslhrt.opendata.arcgis.com/datasets/hsln-pys%C3%A4kit) is imported to OSM. 
 
-Goal of the import is twofold:
+The import has two goals:
 1. Add "H"-prefix to OSM public transportation stops `ref`-tag within Helsinki.
-2. Add features from HSL stop data to OSM public transportation stops within whole HSL area: name, finnish name, swedish name and if stop is sheltered.
+2. Add attributes from HSL stop data to OSM public transportation stops within **whole** HSL area: name, finnish name, swedish name and info if stop is sheltered.
 
 ## Requirements:
 
@@ -64,8 +64,5 @@ Run the container with current directory containing the necessary data as bind m
 ## Validate results
 
 Open the output.osm in JOSM and validate the changes.
-
-TODO
-
 
 Please see https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import
