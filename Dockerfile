@@ -5,4 +5,4 @@ RUN mkdir -p ${WORK}
 WORKDIR ${WORK}
 COPY update-tags.py ${WORK}
 
-CMD python update-tags.py -s ${INPUT} ${STOPS} ${OUTPUT}
+ENTRYPOINT ["python", "update-tags.py", "-s"]

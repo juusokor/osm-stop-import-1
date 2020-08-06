@@ -2,7 +2,7 @@
 
 _Under construction_
 
-This repo consists of tools for one-time OSM import https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import. [HSL public transportation stop data](https://public-transport-hslhrt.opendata.arcgis.com/datasets/hsln-pys%C3%A4kit) is imported to OSM. 
+This repo consists of tools for one-time OSM import https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import. [HSL public transportation stop data](https://public-transport-hslhrt.opendata.arcgis.com/datasets/hsln-pys%C3%A4kit) is imported to OSM.
 
 The import has two goals:
 1. Add "H"-prefix to OSM public transportation stops `ref`-tag within Helsinki.
@@ -57,9 +57,9 @@ Build image
 
 `docker build -t osm-stop-import .`
 
-Run the container with current directory containing the necessary data as bind mount and pass the required command line parameters as environment variables (INPUT, STOPS, OUTPUT):
+Run the container with current directory containing the necessary data as bind mount and pass the files as required command line parameters.:
 
-`docker run -v $PWD:$PWD -w $PWD -e INPUT='hsl-osm-stops-2020-07-22-EXAMPLE-ONLY.osm' -e STOPS='hsl-stop-data-2020-07-22-EXAMPLE-ONLY.csv' -e OUTPUT='output-2020-07-22-EXAMPLE.osm' osm-stop-import`
+`docker run -it -v $PWD:/osm-stop-import/ osm-stop-import input.osm stops.csv output.osm`
 
 ## Validate results
 
