@@ -25,6 +25,7 @@ STATS = {
     "named_fi": 0,
     "named_sv": 0,
 }
+OSM_URL = "https://www.openstreetmap.org"
 
 
 @dataclass
@@ -181,40 +182,44 @@ def main():
     )
 
     args = parse_args()
-
+    print("Executing...")
     etree = et.parse(args.input_osm)
 
     stops = read_stop_data(args.input_stops)
 
-    all_jore_ref = [x.stop_id for x in stops]
+    all_jore_ref = {x.stop_id: x for x in stops}
     all_osm_refs = []
     jore_stops_missing_osm_ref_match = []
 
     for elem in etree.getroot():
 
         osm_tags = get_osm_tags(elem)
+        osm_ref = osm_tags.get("ref")
 
-        if "ref" in osm_tags.keys():
+        if osm_ref:
             osm_id = elem.get("id")
-            all_osm_refs.append(osm_tags["ref"])
+            all_osm_refs.append(osm_ref)
 
-            for jore_stop in stops:
-
+            jore_stop = all_jore_ref.get(osm_ref) or all_jore_ref.get("H" + osm_ref)
+            if jore_stop:
                 # In Helsinki the OSM ref-might already have the H-prefix.
-                if osm_tags["ref"] == jore_stop.stop_id or (
+                if osm_ref == jore_stop.stop_id or (
                     jore_stop.municipality == "Helsinki"
-                    and osm_tags["ref"] == jore_stop.stop_id[1:]
+                    and osm_ref == jore_stop.stop_id[1:]
                 ):
                     STATS["matched"] += 1
                     logging.info(
-                        f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
+                        f"Matched ref {jore_stop.stop_id} between OSM-id: {OSM_URL}/{elem.tag}/{osm_id} and JORE stop: {jore_stop.id}"
                     )
 
-                    if (
-                        jore_stop.municipality == "Helsinki"
-                        and osm_tags["ref"][:1] != "H"
-                    ):
-                        new_ref_value = "H" + osm_tags.get("ref")
+                    stoptype = osm_tags.get("highway") or osm_tags.get(
+                        "public_transport"
+                    )
+                    if stoptype:
+                        logging.info(f"   Stop type: {stoptype}")
+
+                    if jore_stop.municipality == "Helsinki" and osm_ref[:1] != "H":
+                        new_ref_value = "H" + osm_ref
                         update_tag(elem, "ref", new_ref_value)
                         STATS["prefixed"] += 1
 
@@ -250,6 +255,7 @@ def main():
         print(f"OSM stops with 'ref'-tag: {len(all_osm_refs)}")
         print(f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}")
         print(f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}")
+        print(f"OSM-stops missing JORE match: {len(jore_stops_missing_osm_ref_match)}")
 
     print("\nResults\n-------")
     for key, value in STATS.items():
