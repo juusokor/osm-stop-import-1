@@ -15,6 +15,8 @@ import argparse
 import textwrap
 import logging
 import json
+from collections import Counter
+import datetime
 
 STATS = {
     "matched": 0,
@@ -25,6 +27,7 @@ STATS = {
     "named_fi": 0,
     "named_sv": 0,
 }
+OSM_URL = "https://www.openstreetmap.org"
 
 
 @dataclass
@@ -173,48 +176,50 @@ def add_stop_name(elem, jore_stop):
 
 
 def main():
+    log_filename = "update-tags-log-{:%H-%M-%S}.log".format(datetime.datetime.now())
     logging.basicConfig(
-        filename="update-tags-log.log",
-        filemode="w",
-        level=logging.INFO,
-        format="%(message)s",
+        filename=log_filename, filemode="w", level=logging.INFO, format="%(message)s",
     )
 
     args = parse_args()
-
+    print("Executing...")
     etree = et.parse(args.input_osm)
 
     stops = read_stop_data(args.input_stops)
 
-    all_jore_ref = [x.stop_id for x in stops]
+    all_jore_ref = {x.stop_id: x for x in stops}
     all_osm_refs = []
-    jore_stops_missing_osm_ref_match = []
+    osm_ref_missing_jore_match = []
 
     for elem in etree.getroot():
 
         osm_tags = get_osm_tags(elem)
+        osm_ref = osm_tags.get("ref")
 
-        if "ref" in osm_tags.keys():
+        if osm_ref:
             osm_id = elem.get("id")
-            all_osm_refs.append(osm_tags["ref"])
+            all_osm_refs.append(osm_ref)
 
-            for jore_stop in stops:
-
+            jore_stop = all_jore_ref.get(osm_ref) or all_jore_ref.get("H" + osm_ref)
+            if jore_stop:
                 # In Helsinki the OSM ref-might already have the H-prefix.
-                if osm_tags["ref"] == jore_stop.stop_id or (
+                if osm_ref == jore_stop.stop_id or (
                     jore_stop.municipality == "Helsinki"
-                    and osm_tags["ref"] == jore_stop.stop_id[1:]
+                    and osm_ref == jore_stop.stop_id[1:]
                 ):
                     STATS["matched"] += 1
                     logging.info(
-                        f"Matched ref {jore_stop.stop_id} between OSM-id: {osm_id} and JORE stop: {jore_stop.id}"
+                        f"Matched ref {jore_stop.stop_id} between OSM-id: {OSM_URL}/{elem.tag}/{osm_id} and JORE stop: {jore_stop.id}"
                     )
 
-                    if (
-                        jore_stop.municipality == "Helsinki"
-                        and osm_tags["ref"][:1] != "H"
-                    ):
-                        new_ref_value = "H" + osm_tags.get("ref")
+                    stoptype = osm_tags.get("highway") or osm_tags.get(
+                        "public_transport"
+                    )
+                    if stoptype:
+                        logging.info(f"   Stop type: {stoptype}")
+
+                    if jore_stop.municipality == "Helsinki" and osm_ref[:1] != "H":
+                        new_ref_value = "H" + osm_ref
                         update_tag(elem, "ref", new_ref_value)
                         STATS["prefixed"] += 1
 
@@ -237,24 +242,42 @@ def main():
 
                     # Update the tags in case the element tree got a new tag
                     osm_tags = get_osm_tags(elem)
-                else:
-                    jore_stops_missing_osm_ref_match.append(jore_stop)
+            else:
+                osm_ref_missing_jore_match.append(osm_ref)
 
     if args.stats:
         # Print stats if optional command line argument: -s
         all_jore_ref_set = set(all_jore_ref)
         all_osm_refs_set = set(all_osm_refs)
 
-        print(f"JORE-stops: {len(all_jore_ref)}")
-        print(f"Unique JORE stop_ids: {len(all_jore_ref_set)}")
-        print(f"OSM stops with 'ref'-tag: {len(all_osm_refs)}")
-        print(f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}")
-        print(f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}")
+        stat_msg = (
+            f"JORE-stops: {len(all_jore_ref)}\n"
+            f"Unique JORE stop_ids: {len(all_jore_ref_set)}\n"
+            f"OSM stops with 'ref'-tag: {len(all_osm_refs)}\n"
+            f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}\n"
+            f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}\n"
+            f"OSM stops 'ref'-tag values missing JORE match: {len(osm_ref_missing_jore_match)}"
+        )
+        print(stat_msg)
+        logging.info(stat_msg)
+        osm_missing_freq = Counter((osm_ref_missing_jore_match))
+        osm_missing_freq_sorted = {
+            k: v
+            for k, v in sorted(
+                osm_missing_freq.items(), key=lambda item: item[1], reverse=True
+            )
+        }
+        logging.info(
+            "OSM stops 'ref'-tag values missing JORE match occurrence count (value  / count):"
+        )
+        logging.info(osm_missing_freq_sorted)
 
-    print("\nResults\n-------")
-    for key, value in STATS.items():
-        print(f"{key}: {value}")
-
+    stat_msg2 = "\nResults\n-------\n" + "".join(
+        [f"{key}: {value}\n" for key, value in STATS.items()]
+    )
+    print(stat_msg2)
+    logging.info(stat_msg2)
+    print(f"Log file: {log_filename}")
     try:
         etree.write(args.output, encoding="utf-8")
         print(f"\nSaved {args.output} with updated tags.")
