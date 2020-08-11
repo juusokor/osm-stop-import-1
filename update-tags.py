@@ -223,7 +223,11 @@ def main():
                         update_tag(elem, "ref", new_ref_value)
                         STATS["prefixed"] += 1
 
-                    if "shelter" not in osm_tags.keys():
+                    if (
+                        "shelter" not in osm_tags.keys()
+                        and elem.tag != "relation" # No shelter info for relations or stop positions
+                        and stoptype != "stop_position"
+                    ):
                         if jore_stop.shelter == "yes":
                             create_tag(elem, "shelter", "yes")
                             STATS["sheltered_yes"] += 1
