@@ -10,19 +10,22 @@
   node["railway"="tram_stop"]["ref"](area.hki);
   way["railway"="tram_stop"]["ref"](area.hki);
   relation["railway"="tram_stop"]["ref"](area.hki);
-  
+
   // bus stops
   node["highway"="bus_stop"]["ref"](area.hki);
   way["highway"="bus_stop"]["ref"](area.hki);
   relation["highway"="bus_stop"]["ref"](area.hki);
-    
+
   // train and subway stations
   node["railway"="station"]["public_transport"="station"]["ref"](area.hki);
   way["railway"="station"]["public_transport"="station"]["ref"](area.hki);
   relation["railway"="station"]["public_transport"="station"]["ref"](area.hki);
-  
+
   // include stop area relations
   relation["public_transport"="stop_area"]["ref"](area.hki);
+
+  // include stop position
+  node["public_transport"="stop_position"]["ref"](area.hsl);
 )->.hki_stops;
 
 // nodes part of subway relation in Helsinki area.

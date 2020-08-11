@@ -18,19 +18,22 @@
   node["railway"="tram_stop"]["ref"](area.hsl);
   way["railway"="tram_stop"]["ref"](area.hsl);
   relation["railway"="tram_stop"]["ref"](area.hsl);
-  
+
   // bus stops
   node["highway"="bus_stop"]["ref"](area.hsl);
   way["highway"="bus_stop"]["ref"](area.hsl);
   relation["highway"="bus_stop"]["ref"](area.hsl);
-    
+
   // train and subway stations
   node["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
   way["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
   relation["railway"="station"]["public_transport"="station"]["ref"](area.hsl);
-  
+
   // include stop area relations
   relation["public_transport"="stop_area"]["ref"](area.hsl);
+
+  // include stop position
+  node["public_transport"="stop_position"]["ref"](area.hsl);
 )->.hsl_stops;
 
 // nodes part of subway relation in HSL area.
