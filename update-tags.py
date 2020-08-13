@@ -23,6 +23,7 @@ STATS = {
     "prefixed": 0,
     "sheltered_yes": 0,
     "sheltered_no": 0,
+    "shelter_nodata": 0,
     "named": 0,
     "named_fi": 0,
     "named_sv": 0,
@@ -45,15 +46,15 @@ class Stop:
     def __post_init__(self, shelter_param):
         """Get values for shelter and municipality
         """
-        # JORE stop type values for non-sheltered stops converted to bo
+        # JORE stop type values for non-sheltered stops
         # 04 stands for a pole and 08 for stop position. 99 unknown.
         if shelter_param in ("04", "08"):
             self.shelter = "no"
         elif shelter_param == "99":
             self.shelter = "unknown"
 
-        # Is the stop in Helsinki
-        if self.stop_id[:1] == "H":
+        # Is the stop in Helsinki, H for Helsinki, XH for virtual stop in Helsinki
+        if self.stop_id[:1] == "H" or self.stop_id[:2] == "XH":
             self.municipality = "Helsinki"
 
 
@@ -200,32 +201,47 @@ def main():
             osm_id = elem.get("id")
             all_osm_refs.append(osm_ref)
 
-            jore_stop = all_jore_ref.get(osm_ref) or all_jore_ref.get("H" + osm_ref)
+            jore_stop = (
+                all_jore_ref.get(osm_ref)
+                or all_jore_ref.get("H" + osm_ref)
+                or all_jore_ref.get("XH" + osm_ref[1:])
+            )
             if jore_stop:
                 # In Helsinki the OSM ref-might already have the H-prefix.
                 if osm_ref == jore_stop.stop_id or (
                     jore_stop.municipality == "Helsinki"
                     and osm_ref == jore_stop.stop_id[1:]
+                    or osm_ref.replace("X", "XH") == jore_stop.stop_id
                 ):
                     STATS["matched"] += 1
                     logging.info(
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {OSM_URL}/{elem.tag}/{osm_id} and JORE stop: {jore_stop.id}"
                     )
 
-                    stoptype = osm_tags.get("highway") or osm_tags.get(
-                        "public_transport"
+                    stoptype = (
+                        osm_tags.get("highway")
+                        or osm_tags.get("railway")
+                        or osm_tags.get("public_transport")
                     )
                     if stoptype:
                         logging.info(f"   Stop type: {stoptype}")
 
-                    if jore_stop.municipality == "Helsinki" and osm_ref[:1] != "H":
-                        new_ref_value = "H" + osm_ref
-                        update_tag(elem, "ref", new_ref_value)
-                        STATS["prefixed"] += 1
+                    if jore_stop.municipality == "Helsinki":
+                        new_ref_value = False
+                        if osm_ref.startswith("X") and not osm_ref.startswith("XH"):
+                            new_ref_value = osm_ref.replace("X", "XH")
+                            logging.info(f"X -> Xh {new_ref_value}")
+                        elif not osm_ref.startswith("H") and not osm_ref.startswith(
+                            "X"
+                        ):
+                            new_ref_value = "H" + osm_ref
+                        if new_ref_value:
+                            update_tag(elem, "ref", new_ref_value)
+                            STATS["prefixed"] += 1
 
                     if (
                         "shelter" not in osm_tags.keys()
-                        and elem.tag != "relation" # No shelter info for relations or stop positions
+                        and elem.tag != "relation"
                         and stoptype != "stop_position"
                     ):
                         if jore_stop.shelter == "yes":
@@ -235,6 +251,7 @@ def main():
                             create_tag(elem, "shelter", "no")
                             STATS["sheltered_no"] += 1
                         elif jore_stop.shelter == "unknown":
+                            STATS["shelter_nodata"] += 1
                             logging.info(f"   No shelter info in data.")
 
                     any_name_tag_is_missing = any(
