@@ -82,12 +82,6 @@ def parse_args():
         metavar="output.osm",
         help="The ouput .OSM-file with transformed ref-tags, name and shelter info.",
     )
-    parser.add_argument(
-        "-s",
-        "--stats",
-        help="Prints out more verbose stats about script results",
-        action="store_true",
-    )
     return parser.parse_args()
 
 
@@ -176,6 +170,32 @@ def add_stop_name(elem, jore_stop):
         STATS["named_sv"] += 1
 
 
+def write_conflicting_shelter_to_csv(filename, list_of_dicts):
+    """Write list of dicts containing conflicting shelter info to csv."""
+
+    sorted_list = sorted(
+        list_of_dicts, key=lambda i: (i["JORE-SHELTER"], i["REF"]), reverse=True
+    )
+    with open(filename, mode="w") as csv_file:
+        fieldnames = ["REF", "JORE-SHELTER", "OSM-SHELTER", "OSM-ID", "JORE-ID"]
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in sorted_list:
+            writer.writerow(item)
+
+
+def write_list_dict_to_csv(filename, list_of_dicts):
+    """Write list of dicts to csv. Use keys as fieldnames"""
+
+    fieldnames = list_of_dicts[0].keys()
+    with open(filename, mode="w") as csv_file:
+
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in list_of_dicts:
+            writer.writerow(item)
+
+
 def main():
     log_filename = "update-tags-log-{:%H-%M-%S}.log".format(datetime.datetime.now())
     logging.basicConfig(
@@ -191,6 +211,7 @@ def main():
     all_jore_ref = {x.stop_id: x for x in stops}
     all_osm_refs = []
     osm_ref_missing_jore_match = []
+    matched_stops_with_conflicting_shelter_info = []
 
     for elem in etree.getroot():
 
@@ -253,6 +274,23 @@ def main():
                         elif jore_stop.shelter == "unknown":
                             STATS["shelter_nodata"] += 1
                             logging.info(f"   No shelter info in data.")
+                    elif (
+                        "shelter" in osm_tags.keys()
+                        and jore_stop.shelter != "unknown"
+                        and jore_stop.shelter != osm_tags.get("shelter")
+                    ):
+                        logging.info(
+                            f"   Conflict in shelter info: JORE value: '{jore_stop.shelter}' vs OSM-value: '{osm_tags.get('shelter')}'"
+                        )
+                        matched_stops_with_conflicting_shelter_info.append(
+                            {
+                                "JORE-ID": jore_stop.id,
+                                "REF": jore_stop.stop_id,
+                                "JORE-SHELTER": jore_stop.shelter,
+                                "OSM-SHELTER": osm_tags.get("shelter"),
+                                "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
+                            }
+                        )
 
                     any_name_tag_is_missing = any(
                         key not in osm_tags.keys()
@@ -264,34 +302,44 @@ def main():
                     # Update the tags in case the element tree got a new tag
                     osm_tags = get_osm_tags(elem)
             else:
-                osm_ref_missing_jore_match.append(osm_ref)
+                osm_ref_missing_jore_match.append(
+                    {"REF": osm_ref, "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",}
+                )
 
-    if args.stats:
-        # Print stats if optional command line argument: -s
-        all_jore_ref_set = set(all_jore_ref)
-        all_osm_refs_set = set(all_osm_refs)
+    # Print stats and results of transformation
+    all_jore_ref_set = set(all_jore_ref)
+    all_osm_refs_set = set(all_osm_refs)
 
-        stat_msg = (
-            f"JORE-stops: {len(all_jore_ref)}\n"
-            f"Unique JORE stop_ids: {len(all_jore_ref_set)}\n"
-            f"OSM stops with 'ref'-tag: {len(all_osm_refs)}\n"
-            f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}\n"
-            f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}\n"
-            f"OSM stops 'ref'-tag values missing JORE match: {len(osm_ref_missing_jore_match)}"
-        )
-        print(stat_msg)
-        logging.info(stat_msg)
-        osm_missing_freq = Counter((osm_ref_missing_jore_match))
-        osm_missing_freq_sorted = {
-            k: v
-            for k, v in sorted(
-                osm_missing_freq.items(), key=lambda item: item[1], reverse=True
-            )
-        }
-        logging.info(
-            "OSM stops 'ref'-tag values missing JORE match occurrence count (value  / count):"
-        )
-        logging.info(osm_missing_freq_sorted)
+    stat_msg = (
+        f"JORE-stops: {len(all_jore_ref)}\n"
+        f"Unique JORE stop_ids: {len(all_jore_ref_set)}\n"
+        f"OSM stops with 'ref'-tag: {len(all_osm_refs)}\n"
+        f"Unique OSM 'ref'-tags: {len(all_osm_refs_set)}\n"
+        f"OSM stops 'ref'-tag values with JORE match: {STATS['matched']}\n"
+        f"OSM stops 'ref'-tag values missing JORE match: {len(osm_ref_missing_jore_match)}"
+    )
+    print(stat_msg)
+    logging.info(stat_msg)
+    osm_missing_freq = Counter(([x["REF"] for x in osm_ref_missing_jore_match]))
+    osm_missing_freq_sorted = {
+        k: v for k, v in sorted(osm_missing_freq.items(), key=lambda item: item[1])
+    }
+    logging.info(
+        "OSM stops 'ref'-tag values missing JORE match occurrence count (value  / count):"
+    )
+    logging.info(osm_missing_freq_sorted)
+    logging.info(matched_stops_with_conflicting_shelter_info)
+    write_conflicting_shelter_to_csv(
+        "shelter_conflicts.csv", matched_stops_with_conflicting_shelter_info
+    )
+    osm_ref_missing_jore_match_sorted_filtered = sorted(
+        [x for x in osm_ref_missing_jore_match if len(x["REF"]) > 2],
+        key=lambda i: i["REF"],
+        reverse=True,
+    )  # Filter two digit refs as they are mostly platform refs for trains
+    write_list_dict_to_csv(
+        "osm_refs_missing_jore_match.csv", osm_ref_missing_jore_match_sorted_filtered
+    )
 
     stat_msg2 = "\nResults\n-------\n" + "".join(
         [f"{key}: {value}\n" for key, value in STATS.items()]
