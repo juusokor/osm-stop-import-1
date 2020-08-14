@@ -17,6 +17,7 @@ import logging
 import json
 from collections import Counter
 import datetime
+import functools
 
 STATS = {
     "matched": 0,
@@ -100,29 +101,6 @@ def read_stop_data(input_file):
                     row["PYSAKKITYY"],
                 )
                 stops.append(new_stop)
-
-    except Exception as e:
-        logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
-
-    return stops
-
-
-def read_stop_data_geojson(input_file):
-    """Read stop data in GeoJSON format and return a list of Stop-objects with the relevant data for import."""
-    stops = []
-    try:
-        with open(input_file, newline="", encoding="utf8") as jsonfile:
-            data = json.load(jsonfile)
-            for feature in data["features"]:
-                jore_stop = feature["properties"]
-                new_stop = Stop(
-                    jore_stop["SOLMUTUNNU"],
-                    jore_stop["LYHYTTUNNU"],
-                    jore_stop["NIMI1"],
-                    jore_stop["NAMN1"],
-                    jore_stop["PYSAKKITYY"],
-                )
-                stops.append(new_stop)
     except Exception as e:
         logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
 
@@ -170,26 +148,10 @@ def add_stop_name(elem, jore_stop):
         STATS["named_sv"] += 1
 
 
-def write_conflicting_shelter_to_csv(filename, list_of_dicts):
-    """Write list of dicts containing conflicting shelter info to csv."""
-
-    sorted_list = sorted(
-        list_of_dicts, key=lambda i: (i["JORE-SHELTER"], i["REF"]), reverse=True
-    )
-    with open(filename, mode="w") as csv_file:
-        fieldnames = ["REF", "JORE-SHELTER", "OSM-SHELTER", "OSM-ID", "JORE-ID"]
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for item in sorted_list:
-            writer.writerow(item)
-
-
 def write_list_dict_to_csv(filename, list_of_dicts):
     """Write list of dicts to csv. Use keys as fieldnames"""
-
     fieldnames = list_of_dicts[0].keys()
     with open(filename, mode="w") as csv_file:
-
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
         for item in list_of_dicts:
@@ -197,7 +159,7 @@ def write_list_dict_to_csv(filename, list_of_dicts):
 
 
 def main():
-    log_filename = "update-tags-log-{:%H-%M-%S}.log".format(datetime.datetime.now())
+    log_filename = "update-tags.log"
     logging.basicConfig(
         filename=log_filename, filemode="w", level=logging.INFO, format="%(message)s",
     )
@@ -299,8 +261,6 @@ def main():
                     if any_name_tag_is_missing:
                         add_stop_name(elem, jore_stop)
 
-                    # Update the tags in case the element tree got a new tag
-                    osm_tags = get_osm_tags(elem)
             else:
                 osm_ref_missing_jore_match.append(
                     {"REF": osm_ref, "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",}
@@ -328,17 +288,23 @@ def main():
         "OSM stops 'ref'-tag values missing JORE match occurrence count (value  / count):"
     )
     logging.info(osm_missing_freq_sorted)
-    logging.info(matched_stops_with_conflicting_shelter_info)
-    write_conflicting_shelter_to_csv(
-        "shelter_conflicts.csv", matched_stops_with_conflicting_shelter_info
-    )
-    osm_ref_missing_jore_match_sorted_filtered = sorted(
-        [x for x in osm_ref_missing_jore_match if len(x["REF"]) > 2],
-        key=lambda i: i["REF"],
-        reverse=True,
-    )  # Filter two digit refs as they are mostly platform refs for trains
+
     write_list_dict_to_csv(
-        "osm_refs_missing_jore_match.csv", osm_ref_missing_jore_match_sorted_filtered
+        "shelter_conflicts.csv",
+        sorted(
+            matched_stops_with_conflicting_shelter_info,
+            key=lambda i: (i["JORE-SHELTER"], i["REF"]),
+            reverse=True,
+        ),
+    )
+
+    write_list_dict_to_csv(
+        "osm_refs_missing_jore_match.csv",
+        sorted(
+            [x for x in osm_ref_missing_jore_match if len(x["REF"]) > 2],
+            key=lambda i: i["REF"],
+            reverse=True,
+        ),  # Filter two digit refs as they are mostly platform refs for trains
     )
 
     stat_msg2 = "\nResults\n-------\n" + "".join(
@@ -346,7 +312,10 @@ def main():
     )
     print(stat_msg2)
     logging.info(stat_msg2)
-    print(f"Log file: {log_filename}")
+    print(
+        f"Log file: {log_filename}\nosm_refs_missing_jore_match.csv\nshelter_conflicts.csv"
+    )
+
     try:
         etree.write(args.output, encoding="utf-8")
         print(f"\nSaved {args.output} with updated tags.")
