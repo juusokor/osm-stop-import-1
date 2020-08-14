@@ -1,8 +1,6 @@
 ﻿# osm-stop-import
 
-_Under construction_
-
-This repo consists of tools for one-time OSM import https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import. [HSL public transportation stop data](https://public-transport-hslhrt.opendata.arcgis.com/datasets/hsln-pys%C3%A4kit) is imported to OSM.
+This repo consists of tools for one-time OSM import for importing attributes of [HSL public transportation stop data](https://public-transport-hslhrt.opendata.arcgis.com/datasets/hsln-pys%C3%A4kit) into OSM. Further details: https://wiki.openstreetmap.org/wiki/Finland:HSL/HSL_bus_stop_import.
 
 The import has two goals:
 1. Add "H"-prefix to OSM public transportation stops `ref`-tag within Helsinki.
@@ -32,9 +30,10 @@ Get HSL public transportation stop data from [HSL ArcGIS Online portal](https://
 `python update-tags.py -s hsl-osm-stops.osm hsl-stop-data.csv output.osm`
 
 ```
-usage: update-tags.py [-h] [-s] input.osm input.csv output.osm
+usage: update-tags.py [-h] input.osm input.csv output.osm
 
-Finds HSL public transport stops from jOSM-file (.osm) and modifies it's OSM-tags with HSL (JORE) stop data (.csv) using 'ref'-tag value as an identifier.
+Finds HSL public transport stops from jOSM-file (.osm) and modifies it's OSM-tags
+with HSL (JORE) stop data (.csv) using 'ref'-tag value as an identifier.
 
 Following transformations are made for the output jOSM-file:
  - 'ref'-tag values of stops in Helsinki are prefixed with letter 'H'.
@@ -42,13 +41,12 @@ Following transformations are made for the output jOSM-file:
  - Adds 'name', 'name:fi', and 'name:sv'-tag if missing.
 
 positional arguments:
-  input.osm    Source .OSM-file
-  input.csv    HSL stop data in CSV-format
-  output.osm   The ouput .OSM-file with transformed ref-tags, name and shelter info.
+  input.osm   Source .OSM-file
+  input.csv   HSL stop data in CSV-format
+  output.osm  The ouput .OSM-file with transformed ref-tags, name and shelter info.
 
 optional arguments:
-  -h, --help   show this help message and exit
-  -s, --stats  Prints out more verbose stats about script results
+  -h, --help  show this help message and exit
 ```
 
 ### Run with Docker
