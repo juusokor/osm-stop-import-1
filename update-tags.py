@@ -18,6 +18,8 @@ import json
 from collections import Counter
 import datetime
 import functools
+from shapely import geometry
+import pyproj as proj
 
 STATS = {
     "matched": 0,
@@ -43,6 +45,8 @@ class Stop:
     shelter_param: InitVar[str]
     municipality: str = None
     shelter: str = "yes"  # Default is that the stop is sheltered
+    x: str
+    y: str
 
     def __post_init__(self, shelter_param):
         """Get values for shelter and municipality
@@ -106,6 +110,29 @@ def read_stop_data(input_file):
 
     return stops
 
+def read_stop_data_geojson(input_file):
+    """Read stop data in GeoJSON format and return a list of Stop-objects with the relevant data for import."""
+    stops = []
+    try:
+        with open(input_file, newline="", encoding="utf8") as jsonfile:
+            data = json.load(jsonfile)
+            for feature in data["features"]:
+                jore_stop = feature["properties"]
+                lon, lat = feature["geometry"]["Point"]["coordinates"]
+                new_stop = Stop(
+                    jore_stop["SOLMUTUNNU"],
+                    jore_stop["LYHYTTUNNU"],
+                    jore_stop["NIMI1"],
+                    jore_stop["NAMN1"],
+                    jore_stop["PYSAKKITYY"],
+                    lon,
+                    lat
+                )
+                stops.append(new_stop)
+    except Exception as e:
+    except Exception as e:
+        logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
+
 
 def get_osm_tags(xml_element):
     """Return tags as a dict for OSM XML element."""
@@ -157,6 +184,19 @@ def write_list_dict_to_csv(filename, list_of_dicts):
         for item in list_of_dicts:
             writer.writerow(item)
 
+def coordinates_within_planar_distance_from_another(jore_coords, osm_coords, distance):
+  """Project two coordinate pairs from WGS84 coordinates to projected EPSG:3067 coordinates and return true if points are within distance (m) from each other"""
+  crs_wgs = proj.Proj(init='epsg:4326')
+  crs_tm35fin = proj.Proj(init='epsg:3067')
+
+  jore_x, jore_y = proj.transfrom(crs_wgs, crs_tm35fin, jore_coords[0], jore_coords[1])
+  osm_x, osm_y = proj.transfrom(crs_wgs, crs_tm35fin, osm_coords[0], osm_coords[1])
+
+  jore_point = geometry.Point(jore_x, jore_y)
+  osm_point = geometry.Point(osm_x, osm_y)
+
+  return jore_point.distance(osm_point) < distance
+
 
 def main():
     log_filename = "update-tags.log"
@@ -195,7 +235,7 @@ def main():
                     jore_stop.municipality == "Helsinki"
                     and osm_ref == jore_stop.stop_id[1:]
                     or osm_ref.replace("X", "XH") == jore_stop.stop_id
-                ):
+                ) and coordinates_within_planar_distance_from_another(jore_stop.):
                     STATS["matched"] += 1
                     logging.info(
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {OSM_URL}/{elem.tag}/{osm_id} and JORE stop: {jore_stop.id}"
