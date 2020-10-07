@@ -6,4 +6,4 @@ COPY update-tags.py ${WORK}
 COPY requirements.txt ${WORK}
 RUN pip install -r requirements.txt
 
-ENTRYPOINT ["python", "update-tags.py", "-s"]
+ENTRYPOINT ["python", "update-tags.py"]
