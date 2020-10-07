@@ -256,7 +256,9 @@ def main():
 
                     jore_coordinates = (jore_stop.lat, jore_stop.lon)
                     osm_coordinates = (elem.get("lat"), elem.get("lon"))
-                    distance_difference = get_planar_distance_between_points(
+                    distance_difference = 0
+                    if elem.tag == "node":
+                        distance_difference = get_planar_distance_between_points(
                         jore_coordinates, osm_coordinates
                     )
                     if distance_difference < 100:
@@ -324,9 +326,9 @@ def main():
                                 "JORE-LON": jore_stop.lon,
                                 "OSM-LAT": osm_coordinates[0],
                                 "OSM-LON": osm_coordinates[1],
-                                "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
                                 "DISTANCE": distance_difference,
-                            }
+                                "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
+                                                            }
                         )
             else:
                 osm_ref_missing_jore_match.append(
