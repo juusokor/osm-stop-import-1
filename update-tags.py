@@ -45,8 +45,8 @@ class Stop:
     shelter_param: InitVar[str]
     municipality: str = None
     shelter: str = "yes"  # Default is that the stop is sheltered
-    x: str
-    y: str
+    lat: str
+    lon: str
 
     def __post_init__(self, shelter_param):
         """Get values for shelter and municipality
@@ -118,18 +118,17 @@ def read_stop_data_geojson(input_file):
             data = json.load(jsonfile)
             for feature in data["features"]:
                 jore_stop = feature["properties"]
-                lon, lat = feature["geometry"]["Point"]["coordinates"]
+                lat, lon = feature["geometry"]["coordinates"]
                 new_stop = Stop(
                     jore_stop["SOLMUTUNNU"],
                     jore_stop["LYHYTTUNNU"],
                     jore_stop["NIMI1"],
                     jore_stop["NAMN1"],
                     jore_stop["PYSAKKITYY"],
-                    lon,
-                    lat
+                    lat,
+                    lon
                 )
                 stops.append(new_stop)
-    except Exception as e:
     except Exception as e:
         logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
 
@@ -139,6 +138,10 @@ def get_osm_tags(xml_element):
     return {
         element.get("k"): element.get("v") for element in xml_element.findall("tag")
     }
+
+def get_osm_node_elem(xml_element):
+    """Return tags as a dict for OSM XML element."""
+    return []
 
 
 def update_tag(elem, key, value):
@@ -203,12 +206,11 @@ def main():
     logging.basicConfig(
         filename=log_filename, filemode="w", level=logging.INFO, format="%(message)s",
     )
-
     args = parse_args()
     print("Executing...")
     etree = et.parse(args.input_osm)
 
-    stops = read_stop_data(args.input_stops)
+    stops = read_stop_data_geojson(args.input_stops)
 
     all_jore_ref = {x.stop_id: x for x in stops}
     all_osm_refs = []
@@ -235,7 +237,7 @@ def main():
                     jore_stop.municipality == "Helsinki"
                     and osm_ref == jore_stop.stop_id[1:]
                     or osm_ref.replace("X", "XH") == jore_stop.stop_id
-                ) and coordinates_within_planar_distance_from_another(jore_stop.):
+                ) and coordinates_within_planar_distance_from_another([jore_stop.lat, jore_stop.lon], [elem.get("lat"), elem.get["lon"]], 100):
                     STATS["matched"] += 1
                     logging.info(
                         f"Matched ref {jore_stop.stop_id} between OSM-id: {OSM_URL}/{elem.tag}/{osm_id} and JORE stop: {jore_stop.id}"
