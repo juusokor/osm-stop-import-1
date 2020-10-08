@@ -322,8 +322,8 @@ def main():
                             {
                                 "JORE-ID": jore_stop.id,
                                 "REF": jore_stop.stop_id,
-                                "JORE-LAT": jore_stop.lat,
-                                "JORE-LON": jore_stop.lon,
+                                "JORE-LAT": "{0:.5f}".format(jore_stop.lat),
+                                "JORE-LON": "{0:.5f}".format(jore_stop.lon),
                                 "OSM-LAT": osm_coordinates[0],
                                 "OSM-LON": osm_coordinates[1],
                                 "DISTANCE": distance_difference,
@@ -383,7 +383,7 @@ def main():
         "matched_stops_exceeding_max_distance_limit.csv",
         sorted(
             [x for x in matched_but_not_within_distance_limit],
-            key=lambda i: i["REF"],
+            key=lambda i: i["DISTANCE"],
             reverse=True,
         ),
     )
