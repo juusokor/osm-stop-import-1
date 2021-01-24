@@ -91,7 +91,7 @@ def parse_args():
 
 
 def read_stop_data(input_file):
-    """Read stop data in CSV format and retur n a list of Stop-objects with the relevant data for import."""
+    """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
     stops = []
     try:
         with open(input_file, newline="", encoding="utf8") as csvfile:
