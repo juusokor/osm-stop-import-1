@@ -34,6 +34,9 @@ STATS = {
 }
 OSM_URL = "https://www.openstreetmap.org"
 
+# Global coordinate transformer object. WGS84 is EPSG:4326 and ETRS-TM35FIN is EPSG:3067
+COORD_TRANSFORMER = Transformer.from_crs(4326, 3067)
+
 
 @dataclass
 class Stop:
@@ -188,11 +191,8 @@ def write_list_dict_to_csv(filename, list_of_dicts):
 def get_planar_distance_between_points(jore_coords, osm_coords):
     """Transfrom two WGS84 coordinate pairs to projected ETRS-TM35FIN coordinates and return rounded planar distance (m) between the two points"""
 
-    # WGS84 is EPSG:4326 and ETRS-TM35FIN is EPSG:3067
-    transformer = Transformer.from_crs(4326, 3067)
-
-    jore_lat, jore_lon = transformer.transform(jore_coords[0], jore_coords[1])
-    osm_lat, osm_lon = transformer.transform(osm_coords[0], osm_coords[1])
+    jore_lat, jore_lon = COORD_TRANSFORMER.transform(jore_coords[0], jore_coords[1])
+    osm_lat, osm_lon = COORD_TRANSFORMER.transform(osm_coords[0], osm_coords[1])
 
     jore_point = geometry.Point(jore_lat, jore_lon)
     osm_point = geometry.Point(osm_lat, osm_lon)
@@ -259,8 +259,8 @@ def main():
                     distance_difference = 0
                     if elem.tag == "node":
                         distance_difference = get_planar_distance_between_points(
-                        jore_coordinates, osm_coordinates
-                    )
+                            jore_coordinates, osm_coordinates
+                        )
                     if distance_difference < 100:
                         if jore_stop.municipality == "Helsinki":
                             new_ref_value = False
@@ -328,7 +328,7 @@ def main():
                                 "OSM-LON": osm_coordinates[1],
                                 "DISTANCE": distance_difference,
                                 "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
-                                                            }
+                            }
                         )
             else:
                 osm_ref_missing_jore_match.append(
