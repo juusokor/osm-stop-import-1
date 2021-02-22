@@ -49,8 +49,11 @@ class Stop:
     lat: str
     lon: str
     shelter_param: InitVar[str]
+    valid_route_param: InitVar[int]
+    valid_timetable_param: InitVar[int]
     municipality: str = None
     shelter: str = "yes"  # Default is that the stop is sheltered
+    valid_route_and_timetable: bool = True
 
     def __post_init__(self, shelter_param):
         """Get values for shelter and municipality"""
@@ -64,6 +67,9 @@ class Stop:
         # Is the stop in Helsinki, H for Helsinki, XH for virtual stop in Helsinki
         if self.stop_id[:1] == "H" or self.stop_id[:2] == "XH":
             self.municipality = "Helsinki"
+
+        if self.valid_route_param == 0 or self.valid_timetable_param == 0:
+            self.valid_route_and_timetable = False
 
 
 def parse_args():
@@ -106,6 +112,8 @@ def read_stop_data(input_file):
                     row["NIMI1"],
                     row["NAMN1"],
                     row["PYSAKKITYY"],
+                    row["REI_VOIM"],
+                    row["AIK_VOIM"],
                 )
                 stops.append(new_stop)
     except Exception as e:
@@ -234,7 +242,7 @@ def main():
                 or all_jore_ref.get("H" + osm_ref)
                 or all_jore_ref.get("XH" + osm_ref[1:])
             )
-            if jore_stop:
+            if jore_stop and jore_stop.valid_route_and_timetable:
                 # In Helsinki the OSM ref-might already have the H-prefix.
                 if osm_ref == jore_stop.stop_id or (
                     jore_stop.municipality == "Helsinki"
