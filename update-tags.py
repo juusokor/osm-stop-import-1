@@ -211,10 +211,7 @@ def get_planar_distance_between_points(jore_coords, osm_coords):
 def main():
     log_filename = "update-tags.log"
     logging.basicConfig(
-        filename=log_filename,
-        filemode="w",
-        level=logging.INFO,
-        format="%(message)s",
+        filename=log_filename, filemode="w", level=logging.INFO, format="%(message)s",
     )
     args = parse_args()
     print("Executing...")
@@ -340,10 +337,7 @@ def main():
                         )
             else:
                 osm_ref_missing_jore_match.append(
-                    {
-                        "REF": osm_ref,
-                        "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
-                    }
+                    {"REF": osm_ref, "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",}
                 )
 
     # Print stats and results of transformation
@@ -397,8 +391,9 @@ def main():
     )
 
     stat_msg2 = "\nResults\n-------\n" + "".join(
-        [f"{key}: {value}\n" for key, value in STATS.items()]
+        f"{key}: {value}\n" for key, value in STATS.items()
     )
+
     print(stat_msg2)
     logging.info(stat_msg2)
     print(
