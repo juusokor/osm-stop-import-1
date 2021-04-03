@@ -102,7 +102,7 @@ def read_stop_data(input_file):
                 )
                 stops.append(new_stop)
     except Exception as e:
-        logging.error(f"Error reading JORE stop data {input_file}:", exc_info=True)
+        logging.error(f"Error reading JORE stop data {input_file}: {e} ", exc_info=True)
 
     return stops
 
@@ -308,8 +308,9 @@ def main():
     )
 
     stat_msg2 = "\nResults\n-------\n" + "".join(
-        [f"{key}: {value}\n" for key, value in STATS.items()]
+        f"{key}: {value}\n" for key, value in STATS.items()
     )
+
     print(stat_msg2)
     logging.info(stat_msg2)
     print(
