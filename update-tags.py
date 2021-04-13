@@ -55,7 +55,7 @@ class Stop:
     shelter: str = "yes"  # Default is that the stop is sheltered
     valid_route_and_timetable: bool = True
 
-    def __post_init__(self, shelter_param):
+    def __post_init__(self, shelter_param, valid_route_param, valid_timetable_param):
         """Get values for shelter and municipality"""
         # JORE stop type values for non-sheltered stops
         # 04 stands for a pole and 08 for stop position. 99 unknown.
@@ -68,7 +68,7 @@ class Stop:
         if self.stop_id[:1] == "H" or self.stop_id[:2] == "XH":
             self.municipality = "Helsinki"
 
-        if self.valid_route_param == 0 or self.valid_timetable_param == 0:
+        if valid_route_param == 0 or valid_timetable_param == 0:
             self.valid_route_and_timetable = False
 
 
@@ -99,26 +99,26 @@ def parse_args():
     return parser.parse_args()
 
 
-def read_stop_data(input_file):
-    """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
-    stops = []
-    try:
-        with open(input_file, newline="", encoding="utf8") as csvfile:
-            reader = csv.DictReader(csvfile, delimiter=",")
-            for row in reader:
-                new_stop = Stop(
-                    row["SOLMUTUNNU"],
-                    row["LYHYTTUNNU"],
-                    row["NIMI1"],
-                    row["NAMN1"],
-                    row["PYSAKKITYY"],
-                    row["REI_VOIM"],
-                    row["AIK_VOIM"],
-                )
-                stops.append(new_stop)
-    except Exception as e:
-        logging.error(f"Error reading JORE stop data {input_file}: {e}", exc_info=True)
-    return stops
+# def read_stop_data(input_file):
+#     """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
+#     stops = []
+#     try:
+#         with open(input_file, newline="", encoding="utf8") as csvfile:
+#             reader = csv.DictReader(csvfile, delimiter=",")
+#             for row in reader:
+#                 new_stop = Stop(
+#                     row["SOLMUTUNNU"],
+#                     row["LYHYTTUNNU"],
+#                     row["NIMI1"],
+#                     row["NAMN1"],
+#                     row["PYSAKKITYY"],
+#                     row["REI_VOIM"],
+#                     row["AIK_VOIM"],
+#                 )
+#                 stops.append(new_stop)
+#     except Exception as e:
+#         logging.error(f"Error reading JORE stop data {input_file}: {e}", exc_info=True)
+#     return stops
 
 
 def read_stop_data_geojson(input_file):
@@ -138,6 +138,8 @@ def read_stop_data_geojson(input_file):
                     lon,
                     lat,
                     jore_stop["PYSAKKITYY"],
+                    jore_stop["REI_VOIM"],
+                    jore_stop["AIK_VOIM"],
                 )
                 stops.append(new_stop)
     except Exception as e:
@@ -211,7 +213,10 @@ def get_planar_distance_between_points(jore_coords, osm_coords):
 def main():
     log_filename = "update-tags.log"
     logging.basicConfig(
-        filename=log_filename, filemode="w", level=logging.INFO, format="%(message)s",
+        filename=log_filename,
+        filemode="w",
+        level=logging.INFO,
+        format="%(message)s",
     )
     args = parse_args()
     print("Executing...")
@@ -337,7 +342,10 @@ def main():
                         )
             else:
                 osm_ref_missing_jore_match.append(
-                    {"REF": osm_ref, "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",}
+                    {
+                        "REF": osm_ref,
+                        "OSM-ID": f"{OSM_URL}/{elem.tag}/{osm_id}",
+                    }
                 )
 
     # Print stats and results of transformation
