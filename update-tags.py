@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
-Command line script for importing HSL public transportation (JORE) stop data to OpenStreetMap.
+Command line tool for importing HSL public transportation (JORE) stop data to OpenStreetMap.
 
 Usage: python update-tags.py -h
 
-Requires: Python 3.7 or later
+Requires: Python 3.8 or later
 """
 from dataclasses import dataclass, InitVar
 from xml.etree import ElementTree as et
@@ -40,7 +40,7 @@ COORD_TRANSFORMER = Transformer.from_crs(4326, 3067)
 
 @dataclass
 class Stop:
-    """Dataclass object to represent JORE stop with import relevant attributes"""
+    """Dataclass object that represents JORE stop with attributes relevant to the stop import."""
 
     id: str
     stop_id: str
@@ -52,7 +52,7 @@ class Stop:
     valid_route_param: InitVar[int]
     valid_timetable_param: InitVar[int]
     municipality: str = None
-    shelter: str = "yes"  # Default is that the stop is sheltered
+    shelter: str = "yes"  # The stop is sheltered by default
     valid_route_and_timetable: bool = True
 
     def __post_init__(self, shelter_param, valid_route_param, valid_timetable_param):
@@ -64,11 +64,12 @@ class Stop:
         elif shelter_param == "99":
             self.shelter = "unknown"
 
-        # Is the stop in Helsinki, H for Helsinki, XH for virtual stop in Helsinki
+        # Is the stop in Helsinki? H for Helsinki, XH for virtual stop in Helsinki
         if self.stop_id[:1] == "H" or self.stop_id[:2] == "XH":
             self.municipality = "Helsinki"
 
-        if valid_route_param == 0 or valid_timetable_param == 0:
+        # A stop withouth valid routes or timetables is excluded from the import
+        if valid_route_param == 0 and valid_timetable_param == 0:
             self.valid_route_and_timetable = False
 
 
@@ -78,18 +79,18 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(
             """\
-        Finds HSL public transport stops from jOSM-file (.osm) and modifies it's OSM-tags
-        with HSL (JORE) stop data (.csv) using 'ref'-tag value as an identifier.
+        Finds HSL public transport stops from a jOSM-file (.osm) and modifies it's OSM-tags
+        with HSL (JORE) stop data (.geojson) using 'ref'-tag value as an identifier.
 
         Following transformations are made for the output jOSM-file:
-         - 'ref'-tag values of stops in Helsinki are prefixed with letter 'H'.
+         - 'ref'-tag values of stops in Helsinki are prefixed with the letter 'H'.
          - Adds 'shelter'-tag with value 'yes' or 'no'.
          - Adds 'name', 'name:fi', and 'name:sv'-tag if missing."""
         ),
     )
     parser.add_argument("input_osm", metavar="input.osm", help="Source .OSM-file")
     parser.add_argument(
-        "input_stops", metavar="input.csv", help="HSL stop data in CSV-format"
+        "input_stops", metavar="input.geojson", help="HSL stop data in GeoJSON-format"
     )
     parser.add_argument(
         "output",
@@ -97,28 +98,6 @@ def parse_args():
         help="The ouput .OSM-file with transformed ref-tags, name and shelter info.",
     )
     return parser.parse_args()
-
-
-# def read_stop_data(input_file):
-#     """Read stop data in CSV format and return a list of Stop-objects with the relevant data for import."""
-#     stops = []
-#     try:
-#         with open(input_file, newline="", encoding="utf8") as csvfile:
-#             reader = csv.DictReader(csvfile, delimiter=",")
-#             for row in reader:
-#                 new_stop = Stop(
-#                     row["SOLMUTUNNU"],
-#                     row["LYHYTTUNNU"],
-#                     row["NIMI1"],
-#                     row["NAMN1"],
-#                     row["PYSAKKITYY"],
-#                     row["REI_VOIM"],
-#                     row["AIK_VOIM"],
-#                 )
-#                 stops.append(new_stop)
-#     except Exception as e:
-#         logging.error(f"Error reading JORE stop data {input_file}: {e}", exc_info=True)
-#     return stops
 
 
 def read_stop_data_geojson(input_file):
@@ -155,7 +134,7 @@ def get_osm_tags(xml_element):
 
 
 def update_tag(elem, key, value):
-    """Add modify action to element. Updates value of chosen key of the 'tag'-element."""
+    """Add modify action to the XML element. Update value of chosen key of the 'tag'-element."""
     elem.set("action", "modify")
     for tag in elem.findall("tag"):
         if tag.attrib["k"] == key:
@@ -199,7 +178,7 @@ def write_list_dict_to_csv(filename, list_of_dicts):
 
 
 def get_planar_distance_between_points(jore_coords, osm_coords):
-    """Transfrom two WGS84 coordinate pairs to projected ETRS-TM35FIN coordinates and return rounded planar distance (m) between the two points"""
+    """Transform two WGS84 coordinate pairs to projected ETRS-TM35FIN coordinates and return rounded planar distance (m) between the two points"""
 
     jore_lat, jore_lon = COORD_TRANSFORMER.transform(jore_coords[0], jore_coords[1])
     osm_lat, osm_lon = COORD_TRANSFORMER.transform(osm_coords[0], osm_coords[1])
