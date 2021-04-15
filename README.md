@@ -27,7 +27,7 @@ Get HSL public transportation stop data from [HSL ArcGIS Online portal](https://
 
 ## Run the script
 
-`python update-tags.py -s hsl-osm-stops.osm hsl-stop-data.geojson output.osm`
+`python update-tags.py hsl-osm-stops.osm hsl-stop-data.geojson output.osm`
 
 ```
 usage: update-tags.py [-h] input.osm input.geojson output.osm
